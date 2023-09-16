@@ -86,14 +86,15 @@ class UnsupervisedRouter(Router):
             x = x * self.jitter(x)
 
         x_2d = x.reshape(-1, x.shape[-1])
-        scores = F.softplus(self.layer(x_2d))  # elemwise >= 0
-        scores = F.normalize(scores, p=1, dim=1) # sum to 1
-        # scores = F.softmax(self.layer(x_2d), dim=-1)
+        # scores = F.softplus(self.layer(x_2d))  # elemwise >= 0
+        # scores = F.normalize(scores, p=1, dim=1) # sum to 1
+        scores = F.softmax(self.layer(x_2d), dim=-1)
 
         expert_weights, expert_indices = self._top_k(scores)
         expert_weights = expert_weights.detach()  # avoid saving scatter input
+        expert_indices = expert_indices.detach()
 
-        ret = RouterOutput(scores, expert_weights, expert_indices, 0)
+        ret = RouterOutput(scores.detach(), expert_weights, expert_indices, 0)
         if not self.training or num_experts < 2:
             return ret
 

@@ -28,6 +28,9 @@ def clear_load_balancing_loss():
 
 
 def batched_load_balancing_loss(args : Arguments):
+    if args.moe_router != 'switch':
+        return sum(get_load_balancing_loss())
+
     # tokens_per_expert[i].shape = (num_experts)
     # expert_scores[i].shape = (tokens, num_experts)
     tokens_per_expert, expert_scores = zip(*get_load_balancing_loss())
@@ -111,7 +114,12 @@ class MoE(torch.nn.Module):
         self.sort_end_bit = max(int(np.ceil(np.log2(self.num_experts))), 1)
 
         # Token router.
-        self.router = router.LearnedRouter(args)
+        if args.moe_router == 'switch':
+            self.router = router.LearnedRouter(args)
+        elif args.moe_router == 'unsupervised':
+            self.router = router.UnsupervisedRouter(args)
+        else:
+            raise ValueError(f'Unrecognized router name: {args.router}')
 
         # Expert MLP.
         self.mlp = mlp.MLP(args)
@@ -421,10 +429,13 @@ class MoE(torch.nn.Module):
         sl, bs, hs = x.size()
 
         # Compute the expert scores and assignments.
-        scores, expert_weights, top_experts = self.router(x)
+        scores, expert_weights, top_experts, local_loss = self.router(x)
 
         # Compute the experts.
         x, tokens_per_expert = self.forward_fn(
             x, expert_weights, top_experts)
-        save_load_balancing_loss((tokens_per_expert, scores))
+        if self.args.moe_router == 'switch':
+            save_load_balancing_loss((tokens_per_expert, scores))
+        else:
+            save_load_balancing_loss(local_loss)
         return x.view(sl, bs, hs), self.bias

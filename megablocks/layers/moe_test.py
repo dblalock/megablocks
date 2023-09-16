@@ -13,7 +13,8 @@ def test_modules(
         ffn_hidden_size,
         moe_num_experts=1,
         moe_capacity_factor=1,
-        moe_top_k=1):
+        moe_top_k=1,
+        moe_router='switch'):
     init_method = partial(torch.nn.init.normal_, mean=0.0, std=0.1)
     args = Arguments(
         hidden_size=hidden_size,
@@ -21,6 +22,7 @@ def test_modules(
         moe_num_experts=moe_num_experts,
         moe_capacity_factor=moe_capacity_factor,
         moe_top_k=moe_top_k,
+        moe_router=moe_router,
         init_method=init_method)
 
     mlp = testing.FFN(args)
@@ -52,6 +54,18 @@ _FORWARD_TESTS = (
     (16, 1024, 512, 8, 4),
     (16, 1024, 512, 8, 8),
 )
+_ROUTER_TESTS = (
+    (16, 1024, 512, 1, 1),
+    (16, 1024, 512, 2, 1),
+    (16, 1024, 512, 4, 1),
+    (16, 1024, 512, 4, 2),
+    (16, 1024, 512, 8, 4),
+    (16, 1024, 512, 1, 1, 'unsupervised'),
+    (16, 1024, 512, 2, 1, 'unsupervised'),
+    (16, 1024, 512, 4, 1, 'unsupervised'),
+    (16, 1024, 512, 4, 2, 'unsupervised'),
+    (16, 1024, 512, 8, 4, 'unsupervised'),
+)
 
 
 _DENSE_TESTS = (
@@ -80,9 +94,9 @@ class MoETest(parameterized.TestCase):
         out, _ = layer(x)
         self.assertSequenceEqual(out.shape, x.shape)
 
-    @parameterized.parameters(*_FORWARD_TESTS)
+    @parameterized.parameters(*_FORWARD_TESTS, *_ROUTER_TESTS)
     def testMoE_ForwardBackward(
-            self, bs, sl, hs, num_experts, top_k):
+            self, bs, sl, hs, num_experts, top_k, router: str = 'switch'):
         x = torch.randn(sl, bs, hs).half().cuda()
         x.requires_grad_(True)
 
@@ -90,7 +104,8 @@ class MoETest(parameterized.TestCase):
             hidden_size=hs,
             ffn_hidden_size=hs * 2,
             moe_num_experts=num_experts,
-            moe_top_k=top_k)
+            moe_top_k=top_k,
+            moe_router=router)
 
         out, _ = layer(x)
         self.assertSequenceEqual(out.shape, x.shape)

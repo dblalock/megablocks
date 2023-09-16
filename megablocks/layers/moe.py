@@ -29,7 +29,8 @@ def clear_load_balancing_loss():
 
 def batched_load_balancing_loss(args : Arguments):
     if args.moe_router != 'switch':
-        return sum(get_load_balancing_loss())
+        losses = get_load_balancing_loss()
+        return args.moe_loss_weight * sum(losses) / len(losses)
 
     # tokens_per_expert[i].shape = (num_experts)
     # expert_scores[i].shape = (tokens, num_experts)
